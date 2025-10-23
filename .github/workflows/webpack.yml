@@ -41,7 +41,8 @@ jobs:
         tag_name: v${{ steps.pkg.outputs.version }}
         name: Release v${{ steps.pkg.outputs.version }}
         body: |
-          Automated release from CI for version v${{ steps.pkg.outputs.version }}. Contains built extension ZIPs.
+          Automated release from CI for version v${{ steps.pkg.outputs.version }}
+          See diff: ${{ github.event.compare }}
         files: |
           dist/chrome.zip
           dist/firefox.zip
