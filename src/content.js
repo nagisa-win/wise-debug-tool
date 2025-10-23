@@ -101,45 +101,116 @@
     return changeSearchQuery('pn', nextPageNum);
   }
 
-  function clearStorage(key) {
+  // ========== Storage helpers (use extension storage, env-aware) ==========
+
+  const storage = (chrome && chrome.storage && chrome.storage.local) || null;
+  const isOnlineEnv = ONLINE_HOST.includes(location.host);
+  const envKey = key => `${key}_${isOnlineEnv ? 'online' : 'dev'}`;
+
+  function storageGet(keys) {
+    return new Promise(resolve => {
+      if (!storage) {
+        // Fallback (should not happen in extension): try window.localStorage
+        if (typeof keys === 'string') {
+          const v = window.localStorage.getItem(keys);
+          resolve({ [keys]: json(v) || v });
+        } else {
+          const res = {};
+          keys.forEach(k => (res[k] = json(window.localStorage.getItem(k))));
+          resolve(res);
+        }
+        return;
+      }
+      storage.get(keys, res => resolve(res || {}));
+    });
+  }
+
+  function storageSet(obj) {
+    return new Promise(resolve => {
+      if (!storage) {
+        Object.keys(obj || {}).forEach(k => {
+          const v = obj[k];
+          try {
+            window.localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+          } catch {}
+        });
+        resolve();
+        return;
+      }
+      storage.set(obj, () => resolve());
+    });
+  }
+
+  function storageRemove(keys) {
+    return new Promise(resolve => {
+      if (!storage) {
+        (Array.isArray(keys) ? keys : [keys]).forEach(k => window.localStorage.removeItem(k));
+        resolve();
+        return;
+      }
+      storage.remove(keys, () => resolve());
+    });
+  }
+
+  async function getArray(key) {
+    const k = envKey(key);
+    const obj = await storageGet(k);
+    const val = obj[k];
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') return json(val) || [];
+    return [];
+  }
+
+  async function setArray(key, arr) {
+    const k = envKey(key);
+    await storageSet({ [k]: arr });
+  }
+
+  async function getAlwaysLog() {
+    const obj = await storageGet('alwaysLogCard');
+    const v = obj['alwaysLogCard'];
+    return v === true || v === '1';
+  }
+
+  async function setAlwaysLog(val) {
+    await storageSet({ alwaysLogCard: !!val });
+  }
+
+  async function clearStorage(key) {
     if (!key) {
-      window.localStorage.removeItem('sids');
-      window.localStorage.removeItem('words');
+      await storageRemove([envKey('sids'), envKey('words')]);
       return;
     }
-    window.localStorage.removeItem(key);
+    await storageRemove(envKey(key));
   }
 
-  function exportStorage() {
-    const sids = window.localStorage.getItem('sids');
-    const words = window.localStorage.getItem('words');
-    const res = { sids: json(sids) || [], words: json(words) || [] };
-    return res;
+  async function exportStorage() {
+    const sids = await getArray('sids');
+    const words = await getArray('words');
+    return { sids, words };
   }
 
-  function importStorage(res) {
+  async function importStorage(res) {
     const data = typeof res === 'string' ? json(res) : res;
     const { sids = [], words = [] } = data || {};
-    window.localStorage.setItem('sids', JSON.stringify(sids));
-    window.localStorage.setItem('words', JSON.stringify(words));
+    await setArray('sids', sids);
+    await setArray('words', words);
     location.reload();
   }
 
-  function deleteSids(...sids) {
-    const memo = window.localStorage.getItem('sids');
-    let memoArr = json(memo) || [];
-    memoArr = memoArr.filter(i => !sids.map(Number).includes(+i));
-    window.localStorage.setItem('sids', JSON.stringify(memoArr));
+  async function deleteSids(...sids) {
+    const memoArr = await getArray('sids');
+    const filtered = memoArr.filter(i => !sids.map(Number).includes(+i));
+    await setArray('sids', filtered);
   }
 
-  function deleteWordsByIndex(...idxList) {
-    const memo = window.localStorage.getItem('words');
-    const memoArr = json(memo) || [];
+  async function deleteWordsByIndex(...idxList) {
+    const memoArr = await getArray('words');
     const newArr = [];
     memoArr.forEach((w, i) => {
       if (!idxList.includes(i)) newArr.push(w);
     });
-    window.localStorage.setItem('words', JSON.stringify(newArr));
+    await setArray('words', newArr);
   }
 
   function locateCard(tplID, order = 1) {
@@ -169,16 +240,20 @@
     return { y: cardTop };
   }
 
-  function getState() {
+  async function getState() {
     const { urlObj, sid, curWordKey, word, pageNum } = getUrlInfo();
-    let storedSids = window.localStorage.getItem('sids') || '';
-    storedSids = json(storedSids) || [];
+    let storedSids = await getArray('sids');
     if (sid && !storedSids.includes(sid)) storedSids.push(sid);
-    storedSids.sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
-    let storedWords = window.localStorage.getItem('words') || '';
-    storedWords = json(storedWords) || [];
+    storedSids = storedSids
+      .map(s => String(s))
+      .sort((a, b) => Number.parseInt(a) - Number.parseInt(b));
+    await setArray('sids', storedSids);
+
+    let storedWords = await getArray('words');
     if (word && !storedWords.includes(word)) storedWords.push(word);
-    const alwaysLog = window.localStorage.getItem('alwaysLogCard') === '1';
+    await setArray('words', storedWords);
+
+    const alwaysLog = await getAlwaysLog();
     return {
       host: urlObj.host,
       isPC,
@@ -194,10 +269,6 @@
     };
   }
 
-  function setAlwaysLog(val) {
-    window.localStorage.setItem('alwaysLogCard', val ? '1' : '0');
-  }
-
   // 暴露 API 给 popup：通过消息通信
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     (async () => {
@@ -205,7 +276,7 @@
         const { cmd, payload } = msg || {};
         switch (cmd) {
           case 'get_state':
-            return sendResponse({ ok: true, data: getState() });
+            return sendResponse({ ok: true, data: await getState() });
           case 'change_search_query':
             changeSearchQuery(payload?.key, payload?.val);
             return sendResponse({ ok: true });
@@ -219,18 +290,18 @@
             prevPage();
             return sendResponse({ ok: true });
           case 'clear_storage':
-            clearStorage(payload?.key);
+            await clearStorage(payload?.key);
             return sendResponse({ ok: true });
           case 'export_storage':
-            return sendResponse({ ok: true, data: exportStorage() });
+            return sendResponse({ ok: true, data: await exportStorage() });
           case 'import_storage':
-            importStorage(payload?.data);
+            await importStorage(payload?.data);
             return sendResponse({ ok: true });
           case 'delete_sids':
-            deleteSids(...(payload?.sids || []));
+            await deleteSids(...(payload?.sids || []));
             return sendResponse({ ok: true });
           case 'delete_words_by_index':
-            deleteWordsByIndex(...(payload?.idxList || []));
+            await deleteWordsByIndex(...(payload?.idxList || []));
             return sendResponse({ ok: true });
           case 'log_card':
             return sendResponse({ ok: true, data: logCard() });
@@ -240,7 +311,7 @@
               data: locateCard(payload?.tplID, payload?.order || 1),
             });
           case 'set_always_log':
-            setAlwaysLog(!!payload?.val);
+            await setAlwaysLog(!!payload?.val);
             return sendResponse({ ok: true });
           default:
             return sendResponse({ ok: false, error: 'unknown_cmd' });
@@ -255,10 +326,12 @@
 
   // 页面加载时，必要的自动行为
   try {
-    const state = getState();
-    if (state.isOnlineHost || state.alwaysLog) {
-      logCard();
-    }
+    const isOnlineHost = ONLINE_HOST.includes(location.host);
+    getAlwaysLog()
+      .then(val => {
+        if (isOnlineHost || val) logCard();
+      })
+      .catch(() => {});
   } catch (e) {
     console.warn('init log failed:', e);
   }
