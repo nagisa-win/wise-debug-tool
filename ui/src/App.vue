@@ -71,11 +71,12 @@
 
       <el-form-item label="工具">
         <el-space wrap>
-          <el-button @click="logCard">log</el-button>
-          <el-button v-if="!state.isOnlineHost" type="danger" @click="changeHost"
+          <el-button plain @click="logCard">log</el-button>
+          <el-button v-if="!state.isOnlineHost" type="danger" @click="changeHost" plain
             >切换线上</el-button
           >
-          <el-button v-else type="default" disabled>已是线上</el-button>
+          <el-button v-else type="default" disabled plain>已是线上</el-button>
+          <el-button type="success" plain @click="scrollToTop">回顶</el-button>
         </el-space>
       </el-form-item>
 
@@ -192,7 +193,8 @@ type ContentCommand =
   | 'locate_card'
   | 'export_storage'
   | 'import_storage'
-  | 'set_always_log';
+  | 'set_always_log'
+  | 'scroll_to_top';
 
 type CommandPayloadMap = {
   get_state: undefined;
@@ -308,6 +310,9 @@ async function changeHost() {
 /** 在控制台打印卡片信息 */
 async function logCard() {
   await callContent('log_card');
+}
+async function scrollToTop() {
+  await callContent('scroll_to_top');
 }
 /** 根据 tplID + 序号定位卡片 */
 async function locate() {

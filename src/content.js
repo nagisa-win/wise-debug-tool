@@ -240,6 +240,10 @@
     return { y: cardTop };
   }
 
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   async function getState() {
     const { urlObj, sid, curWordKey, word, pageNum } = getUrlInfo();
     let storedSids = await getArray('sids');
@@ -312,6 +316,9 @@
             });
           case 'set_always_log':
             await setAlwaysLog(!!payload?.val);
+            return sendResponse({ ok: true });
+          case 'scroll_to_top':
+            scrollToTop();
             return sendResponse({ ok: true });
           default:
             return sendResponse({ ok: false, error: 'unknown_cmd' });
