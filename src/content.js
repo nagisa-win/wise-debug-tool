@@ -50,7 +50,7 @@
       const tplName = tpl.getAttribute('tpl');
       const srcId = tpl.getAttribute('new_srcid') || tpl.getAttribute('srcid');
       const count = countMap.get(tplName) || 1;
-      logArr.push({ order, tpl: tplName, srcId, c: count });
+      logArr.push({ order, tpl: tplName, srcId, count });
       if (tpl.querySelector('div#card-info-dom')) return;
       tpl.style.position = 'relative';
       const infoDom = document.createElement('div');
@@ -166,14 +166,13 @@
     await storageSet({ [k]: arr });
   }
 
-  async function getAlwaysLog() {
-    const obj = await storageGet('alwaysLogCard');
-    const v = obj['alwaysLogCard'];
-    return v === true || v === '1';
+  function getAlwaysLog() {
+    const obj = localStorage.getItem('alwaysLogCard');
+    return obj && Number(obj) === 1;
   }
 
-  async function setAlwaysLog(val) {
-    await storageSet({ alwaysLogCard: !!val });
+  function setAlwaysLog(val) {
+    localStorage.setItem('alwaysLogCard', val);
   }
 
   async function clearStorage(key) {
@@ -257,7 +256,7 @@
     if (word && !storedWords.includes(word)) storedWords.push(word);
     await setArray('words', storedWords);
 
-    const alwaysLog = await getAlwaysLog();
+    const alwaysLog = getAlwaysLog();
     return {
       host: urlObj.host,
       isPC,
@@ -315,7 +314,7 @@
               data: locateCard(payload?.tplID, payload?.order || 1),
             });
           case 'set_always_log':
-            await setAlwaysLog(!!payload?.val);
+            setAlwaysLog(payload?.val ? 1 : 0);
             return sendResponse({ ok: true });
           case 'scroll_to_top':
             scrollToTop();
@@ -334,11 +333,7 @@
   // 页面加载时，必要的自动行为
   try {
     const isOnlineHost = ONLINE_HOST.includes(location.host);
-    getAlwaysLog()
-      .then(val => {
-        if (isOnlineHost || val) logCard();
-      })
-      .catch(() => {});
+    if (isOnlineHost || getAlwaysLog()) logCard();
   } catch (e) {
     console.warn('init log failed:', e);
   }
