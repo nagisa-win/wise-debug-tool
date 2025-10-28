@@ -1,6 +1,8 @@
 # wise-debug-tool
 
-## 百度无线搜索页面调试工具（Chrome 扩展 / Firefox 扩展）。
+## 百度搜索页面调试工具（Chrome 扩展 / Firefox 扩展）。
+
+> 也支持PC端
 
 ### 快速开始
 

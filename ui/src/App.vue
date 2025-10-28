@@ -1,112 +1,115 @@
 <template>
-  <div class="app-container">
-    <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px">
-      <el-tag type="info" style="max-width: 12rem; overflow: hidden">Host: {{ state.host }}</el-tag>
+  <div :class="['app-container', currentTab]">
+    <div class="status-bar">
+      <el-tag type="info" style="max-width: 15rem; overflow: hidden;">{{ state.host }}</el-tag>
       <el-tag :type="state.isOnlineHost ? 'danger' : 'success'">{{
         state.isOnlineHost ? '线上' : '非线上'
       }}</el-tag>
       <el-tag>{{ state.isPC ? 'PC' : 'WISE' }}</el-tag>
-      <el-switch
-        v-model="alwaysLog"
-        active-text="自动log"
-        style="flex-shrink: 0"
-        @change="setAlwaysLog"
-      />
     </div>
 
-    <el-form label-width="70px" size="small">
-      <el-form-item label="SID">
-        <el-select
-          v-model="sidValue"
-          placeholder="选择或输入SID"
-          filterable
-          style="width: 100%"
-          @change="onSidChange"
-        >
-          <el-option :value="'0'" label="无sid" />
-          <el-option
-            v-for="(s, idx) in state.storedSids"
-            :key="s"
-            :value="String(s)"
-            :label="`${s} (${idx})`"
-          />
-          <el-option :value="'-2'" label="-- 输入sid --" />
-          <el-option :value="'-1'" label="== 清空sid ==" />
-        </el-select>
-      </el-form-item>
+    <el-radio-group v-model="currentTab" size="small" class="radio-group">
+      <el-radio-button label="main">主功能</el-radio-button>
+      <el-radio-button label="manage">参数管理</el-radio-button>
+      <el-radio-button label="top">热门Query</el-radio-button>
+    </el-radio-group>
 
-      <el-form-item label="Query">
-        <el-select
-          v-model="wordValue"
-          placeholder="选择或输入查询词"
-          filterable
-          style="width: 100%"
-          @change="onWordChange"
-        >
-          <el-option
-            v-for="(w, idx) in state.storedWords"
-            :key="w + '_' + idx"
-            :value="w"
-            :label="decodeURIComponentSafe(w) + ` (${idx})`"
-          />
-          <el-option :value="'-2'" label="-- 输入word --" />
-          <el-option :value="'-1'" label="== 清空word ==" />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item label="分页">
-        <el-space>
-          <el-button @click="prevPage">上一页</el-button>
-          <el-button type="primary" @click="nextPage">下一页</el-button>
-        </el-space>
-      </el-form-item>
-
-      <el-form-item label="定位卡片">
-        <el-space>
-          <el-input v-model="tplID" placeholder="tpl 或 srcid" style="width: 140px" />
-          <span>#</span>
-          <el-input-number v-model="order" :min="1" :max="50" style="width: 100px" />
-          <el-button @click="locate">定位</el-button>
-        </el-space>
-      </el-form-item>
-
-      <el-form-item label="工具">
-        <el-space wrap>
-          <el-button plain @click="logCard">log</el-button>
-          <el-button v-if="!state.isOnlineHost" type="danger" @click="changeHost" plain
-            >切换线上</el-button
+    <template v-if="currentTab === 'main'">
+      <el-form label-width="60px" size="small">
+        <el-form-item label="SID">
+          <el-select
+            v-model="sidValue"
+            placeholder="选择或输入SID"
+            filterable
+            style="width: 100%"
+            placement="bottom-start"
+            popper-class="popup-select-dropdown"
+            @change="onSidChange"
           >
-          <el-button v-else type="default" disabled plain>已是线上</el-button>
-          <el-button type="success" plain @click="scrollToTop">回顶</el-button>
-        </el-space>
-      </el-form-item>
+            <el-option :value="'0'" label="无sid" />
+            <el-option
+              v-for="(s, idx) in state.storedSids"
+              :key="s"
+              :value="String(s)"
+              :label="`${s} (${idx})`"
+            />
+            <!-- <el-option :value="'-2'" label="-- 输入sid --" />
+          <el-option :value="'-1'" label="== 清空sid ==" /> -->
+          </el-select>
+        </el-form-item>
 
-      <el-form-item label="导入导出">
-        <el-space direction="vertical" alignment="stretch" style="width: 100%">
+        <el-form-item label="Query">
+          <el-select
+            v-model="wordValue"
+            placeholder="选择或输入查询词"
+            filterable
+            style="width: 100%"
+            placement="bottom-start"
+            popper-class="popup-select-dropdown"
+            @change="onWordChange"
+          >
+            <el-option
+              v-for="(w, idx) in state.storedWords"
+              :key="w + '_' + idx"
+              :value="w"
+              :label="decodeURIComponentSafe(w) + ` (${idx})`"
+            />
+            <!-- <el-option :value="'-2'" label="-- 输入word --" />
+          <el-option :value="'-1'" label="== 清空word ==" /> -->
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="分页">
           <el-space>
-            <el-button @click="doExport">导出</el-button>
-            <el-button type="primary" @click="doImport">导入并刷新</el-button>
-            <el-popconfirm title="确认清空本地缓存(sids/words)？" @confirm="clearAll">
-              <template #reference>
-                <el-button type="warning">清空缓存</el-button>
-              </template>
-            </el-popconfirm>
+            <el-button @click="prevPage">上一页</el-button>
+            <el-button type="primary" @click="nextPage">下一页</el-button>
           </el-space>
-          <el-input
-            v-model="ioText"
-            :autosize="{ minRows: 3, maxRows: 8 }"
-            type="textarea"
-            placeholder="导出结果会显示在此，也可将外部JSON粘贴到此处导入"
-          />
-        </el-space>
-      </el-form-item>
-    </el-form>
+        </el-form-item>
+
+        <el-form-item label="定位卡片">
+          <el-space>
+            <el-input v-model="tplID" placeholder="tpl 或 srcid" style="width: 140px" />
+            <el-input-number v-model="order" :min="1" :max="50" style="width: 90px" />
+            <el-button @click="locate">定位</el-button>
+          </el-space>
+        </el-form-item>
+
+        <el-form-item label="工具">
+          <el-space wrap>
+            <el-switch
+              v-model="alwaysLog"
+              active-text="始终log"
+              style="flex-shrink: 0"
+              @change="setAlwaysLog"
+            />
+            <el-button plain @click="logCard">log</el-button>
+            <fragment>
+              <el-button v-if="!state.isOnlineHost" type="danger" @click="changeHost" plain
+                >切换线上</el-button
+              >
+              <el-button v-else type="default" disabled plain>已是线上</el-button>
+            </fragment>
+            <el-button type="success" plain @click="scrollToTop">回顶</el-button>
+          </el-space>
+        </el-form-item>
+      </el-form>
+    </template>
+
+    <template v-else-if="currentTab === 'manage'">
+      <ManageParams />
+    </template>
+
+    <template v-else>
+      <GetTopQueries />
+    </template>
   </div>
 </template>
 
 <script lang="ts" setup>
-import { onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref, watch } from 'vue';
 import type { State, ContentCommand, CommandPayloadMap, CommandResponseMap } from './types';
+import ManageParams from './pages/ManageParams.vue';
+import GetTopQueries from './pages/GetTopQueries.vue';
 
 const state = reactive<State>({
   host: '',
@@ -127,7 +130,14 @@ const wordValue = ref<string>('');
 const alwaysLog = ref<boolean>(false);
 const tplID = ref<string>('');
 const order = ref<number>(1);
-const ioText = ref<string>('');
+const currentTab = ref<'main' | 'manage' | 'top'>('main');
+
+watch(currentTab, (val, oldVal) => {
+  if (val !== oldVal && val === 'main') {
+    // 切回主功能页时刷新状态
+    initializeState().catch(console.warn);
+  }
+});
 
 // 缓存上次获取的状态，避免每次打开popup都重新获取
 let cachedState: State | null = null;
@@ -310,25 +320,6 @@ async function locate() {
   await callContent('locate_card', { tplID: tplID.value, order: order.value });
 }
 
-/** 导出本地缓存（sids/words）为 JSON 文本 */
-async function doExport() {
-  const data = await callContent('export_storage');
-  ioText.value = JSON.stringify(data);
-}
-/** 从输入框导入 JSON，并触发页面刷新 */
-async function doImport() {
-  if (!ioText.value) return;
-  await callContent('import_storage', { data: ioText.value });
-  // 导入后清除缓存
-  cachedState = null;
-}
-/** 清空所有本地缓存，并刷新状态 */
-async function clearAll() {
-  await callContent('clear_storage');
-  // 清除缓存并重新获取状态
-  cachedState = null;
-  await initializeState();
-}
 /** 设置是否自动 log */
 async function setAlwaysLog(val: boolean) {
   await callContent('set_always_log', { val });
@@ -350,5 +341,33 @@ body {
 .app-container {
   min-width: 360px;
   padding: 9px;
+
+  &.main {
+    min-height: 400px;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .radio-group {
+    width: 100%;
+    margin-bottom: 6px;
+    justify-content: center;
+  }
+}
+
+/* 精简下拉高度，适配弹窗 */
+.popup-select-dropdown {
+  .el-select-dropdown__wrap {
+    max-height: 240px !important;
+  }
+  .el-select-dropdown__item {
+    line-height: 28px;
+    height: 28px;
+  }
 }
 </style>
