@@ -9,4 +9,11 @@ export default defineConfig({
     emptyOutDir: true,
   },
   base: './',
+  css: {
+    preprocessorOptions: {
+      less: {
+        javascriptEnabled: true,
+      },
+    },
+  },
 });

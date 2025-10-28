@@ -1,5 +1,5 @@
 <template>
-  <div style="min-width: 360px; padding: 12px">
+  <div class="app-container">
     <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px">
       <el-tag type="info" style="max-width: 12rem; overflow: hidden">Host: {{ state.host }}</el-tag>
       <el-tag :type="state.isOnlineHost ? 'danger' : 'success'">{{
@@ -64,7 +64,8 @@
       <el-form-item label="定位卡片">
         <el-space>
           <el-input v-model="tplID" placeholder="tpl 或 srcid" style="width: 140px" />
-          <el-input-number v-model="order" :min="1" :max="50" />
+          <span>#</span>
+          <el-input-number v-model="order" :min="1" :max="50" style="width: 100px" />
           <el-button @click="locate">定位</el-button>
         </el-space>
       </el-form-item>
@@ -128,6 +129,10 @@ const tplID = ref<string>('');
 const order = ref<number>(1);
 const ioText = ref<string>('');
 
+// 缓存上次获取的状态，避免每次打开popup都重新获取
+let cachedState: State | null = null;
+let lastTabId: number | null = null;
+
 /**
  * 安全地对字符串进行解码：
  * - 正常情况下返回 decodeURIComponent 结果；
@@ -159,7 +164,7 @@ async function getActiveTabId(): Promise<number> {
   });
 }
 
-async function callContent<K extends keyof CommandPayloadMap & ContentCommand>(
+async function callContent<K extends ContentCommand>(
   cmd: K,
   payload?: CommandPayloadMap[K]
 ): Promise<CommandResponseMap[K]> {
@@ -181,14 +186,52 @@ async function callContent<K extends keyof CommandPayloadMap & ContentCommand>(
 }
 
 /**
- * 拉取并刷新弹窗内部状态。
+ * 检查是否需要刷新状态（标签页变化或缓存为空）
  */
-async function refreshState() {
-  const s = await callContent('get_state');
-  Object.assign(state, s);
-  sidValue.value = s.sid ? String(s.sid) : '0';
-  wordValue.value = s.word || '';
-  alwaysLog.value = !!s.alwaysLog;
+async function shouldRefreshState(): Promise<boolean> {
+  const currentTabId = await getActiveTabId();
+  const tabChanged = lastTabId !== currentTabId;
+  lastTabId = currentTabId;
+
+  return !cachedState || tabChanged;
+}
+
+/**
+ * 获取状态（带缓存）
+ */
+async function getCachedState(): Promise<State> {
+  const needsRefresh = await shouldRefreshState();
+
+  if (needsRefresh || !cachedState) {
+    cachedState = await callContent('get_state');
+  }
+
+  return cachedState;
+}
+
+/**
+ * 更新缓存状态
+ */
+function updateCachedState(newState: Partial<State>) {
+  if (cachedState) {
+    cachedState = { ...cachedState, ...newState };
+  }
+}
+
+/**
+ * 初始化popup状态（只在需要时刷新）
+ */
+async function initializeState() {
+  try {
+    const s = await getCachedState();
+    Object.assign(state, s);
+    sidValue.value = s.sid ? String(s.sid) : '0';
+    wordValue.value = s.word || '';
+    alwaysLog.value = !!s.alwaysLog;
+  } catch (error) {
+    console.warn('初始化状态失败:', error);
+    // 如果获取状态失败，使用默认状态
+  }
 }
 
 /**
@@ -197,20 +240,25 @@ async function refreshState() {
 async function onSidChange(val: string) {
   if (val === '0') {
     await callContent('change_search_query', { key: 'sid', val: '' });
+    updateCachedState({ sid: '' });
     return;
   }
   if (val === '-1') {
     await callContent('clear_storage', { key: 'sids' });
-    await refreshState();
+    // 清除缓存并重新获取状态
+    cachedState = null;
+    await initializeState();
     return;
   }
   if (val === '-2') {
     const newSid = prompt('输入新的sid：') || '';
     if (!newSid) return;
     await callContent('change_search_query', { key: 'sid', val: newSid });
+    updateCachedState({ sid: newSid });
     return;
   }
   await callContent('change_search_query', { key: 'sid', val });
+  updateCachedState({ sid: val });
 }
 
 /**
@@ -219,16 +267,22 @@ async function onSidChange(val: string) {
 async function onWordChange(val: string) {
   if (val === '-1') {
     await callContent('clear_storage', { key: 'words' });
-    await refreshState();
+    // 清除缓存并重新获取状态
+    cachedState = null;
+    await initializeState();
     return;
   }
   if (val === '-2') {
     const newWord = prompt('输入新的word：') || '';
     if (!newWord) return;
     await callContent('change_search_query', { key: state.curWordKey, val: newWord });
+    updateCachedState({ word: newWord });
     return;
   }
-  if (val) await callContent('change_search_query', { key: state.curWordKey, val });
+  if (val) {
+    await callContent('change_search_query', { key: state.curWordKey, val });
+    updateCachedState({ word: val });
+  }
 }
 /** 下一页 */
 async function nextPage() {
@@ -241,6 +295,8 @@ async function prevPage() {
 /** 切换线上/非线上环境 */
 async function changeHost() {
   await callContent('change_host');
+  // 切换host后清除缓存
+  cachedState = null;
 }
 /** 在控制台打印卡片信息 */
 async function logCard() {
@@ -263,26 +319,36 @@ async function doExport() {
 async function doImport() {
   if (!ioText.value) return;
   await callContent('import_storage', { data: ioText.value });
+  // 导入后清除缓存
+  cachedState = null;
 }
 /** 清空所有本地缓存，并刷新状态 */
 async function clearAll() {
   await callContent('clear_storage');
-  await refreshState();
+  // 清除缓存并重新获取状态
+  cachedState = null;
+  await initializeState();
 }
 /** 设置是否自动 log */
 async function setAlwaysLog(val: boolean) {
   await callContent('set_always_log', { val });
+  updateCachedState({ alwaysLog: val });
 }
 
 onMounted(() => {
-  refreshState().catch(console.warn);
+  initializeState().catch(console.warn);
 });
 </script>
 
-<style>
+<style lang="less">
 html,
 body {
   margin: 0;
   padding: 0;
+}
+
+.app-container {
+  min-width: 360px;
+  padding: 9px;
 }
 </style>

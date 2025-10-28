@@ -48,6 +48,7 @@ export type CommandPayloadMap = {
   export_storage: undefined;
   import_storage: { data: string };
   set_always_log: { val: boolean };
+  scroll_to_top: undefined;
 };
 
 export type CommandResponseMap = {
@@ -62,4 +63,5 @@ export type CommandResponseMap = {
   export_storage: { sids: any[]; words: string[] };
   import_storage: true;
   set_always_log: true;
+  scroll_to_top: true;
 };

@@ -51,7 +51,7 @@
       const srcId = tpl.getAttribute('new_srcid') || tpl.getAttribute('srcid');
       const count = countMap.get(tplName) || 1;
       logArr.push({ order, tpl: tplName, srcId, count });
-      if (tpl.querySelector('div#card-info-dom')) return;
+      if (tpl.querySelector('div[card-info-dom]')) return;
       tpl.style.position = 'relative';
       const infoDom = document.createElement('div');
       infoDom.style.position = 'absolute';
@@ -60,7 +60,7 @@
       infoDom.style.fontSize = '10px';
       infoDom.style.fontFamily = 'monospace';
       infoDom.innerText = order + '-' + tplName + '-' + srcId + '#' + count;
-      infoDom.id = 'card-info-dom';
+      infoDom.setAttribute('card-info-dom', 1);
       tpl.appendChild(infoDom);
       countMap.set(tplName, count + 1);
     });
@@ -272,6 +272,34 @@
     };
   }
 
+  // 缓存当前页面状态
+  let cachedState = null;
+  let lastUrl = location.href;
+
+  // 检查URL是否发生变化
+  function checkUrlChange() {
+    const currentUrl = location.href;
+    if (currentUrl !== lastUrl) {
+      lastUrl = currentUrl;
+      return true;
+    }
+    return false;
+  }
+
+  // 获取状态（带缓存）
+  async function getCachedState() {
+    const urlChanged = checkUrlChange();
+    if (!cachedState || urlChanged) {
+      cachedState = await getState();
+    }
+    return cachedState;
+  }
+
+  // 更新缓存状态
+  function updateCachedState(newState) {
+    cachedState = { ...cachedState, ...newState };
+  }
+
   // 暴露 API 给 popup：通过消息通信
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     (async () => {
@@ -279,9 +307,15 @@
         const { cmd, payload } = msg || {};
         switch (cmd) {
           case 'get_state':
-            return sendResponse({ ok: true, data: await getState() });
+            return sendResponse({ ok: true, data: await getCachedState() });
           case 'change_search_query':
             changeSearchQuery(payload?.key, payload?.val);
+            // 更新缓存中的相关状态
+            if (payload?.key === 'sid') {
+              updateCachedState({ sid: payload.val });
+            } else if (payload?.key === 'wd' || payload?.key === 'word') {
+              updateCachedState({ word: payload.val, curWordKey: payload.key });
+            }
             return sendResponse({ ok: true });
           case 'change_host':
             changeHost(payload?.host);
@@ -294,17 +328,29 @@
             return sendResponse({ ok: true });
           case 'clear_storage':
             await clearStorage(payload?.key);
+            // 清除缓存
+            cachedState = null;
             return sendResponse({ ok: true });
           case 'export_storage':
             return sendResponse({ ok: true, data: await exportStorage() });
           case 'import_storage':
             await importStorage(payload?.data);
+            // 清除缓存并重新获取状态
+            cachedState = null;
             return sendResponse({ ok: true });
           case 'delete_sids':
             await deleteSids(...(payload?.sids || []));
+            // 更新缓存
+            if (cachedState) {
+              cachedState.storedSids = await getArray('sids');
+            }
             return sendResponse({ ok: true });
           case 'delete_words_by_index':
             await deleteWordsByIndex(...(payload?.idxList || []));
+            // 更新缓存
+            if (cachedState) {
+              cachedState.storedWords = await getArray('words');
+            }
             return sendResponse({ ok: true });
           case 'log_card':
             return sendResponse({ ok: true, data: logCard() });
@@ -315,6 +361,10 @@
             });
           case 'set_always_log':
             setAlwaysLog(payload?.val ? 1 : 0);
+            // 更新缓存
+            if (cachedState) {
+              cachedState.alwaysLog = payload.val;
+            }
             return sendResponse({ ok: true });
           case 'scroll_to_top':
             scrollToTop();
@@ -330,11 +380,38 @@
     return true;
   });
 
+  // 监听页面变化事件
+  function setupPageChangeListeners() {
+    // 监听URL变化（单页应用）
+    let currentUrl = location.href;
+    const observer = new MutationObserver(() => {
+      if (location.href !== currentUrl) {
+        currentUrl = location.href;
+        // URL变化时清除缓存
+        cachedState = null;
+      }
+    });
+
+    observer.observe(document, { subtree: true, childList: true });
+
+    // 监听页面刷新
+    window.addEventListener('beforeunload', () => {
+      // 页面刷新时清除缓存
+      cachedState = null;
+    });
+  }
+
   // 页面加载时，必要的自动行为
   try {
     const isOnlineHost = ONLINE_HOST.includes(location.host);
     if (isOnlineHost || getAlwaysLog()) logCard();
+
+    // 设置页面变化监听
+    setupPageChangeListeners();
+
+    // 初始化缓存
+    getCachedState().catch(console.warn);
   } catch (e) {
-    console.warn('init log failed:', e);
+    console.warn('init failed:', e);
   }
 })();
