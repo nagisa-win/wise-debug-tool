@@ -30,8 +30,9 @@ process.on('SIGTERM', () => {
   process.exit(0);
 });
 
-// 1) UI dev (vite in workspace)
-const uiDev = run(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['run', '-w', 'ui', 'dev']);
+// 1) UI dev (vite in workspace via pnpm)
+const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const uiDev = run(pnpmBin, ['-C', 'ui', 'run', 'dev']);
 children.push(uiDev);
 
 // 2) Webpack watch (root)
