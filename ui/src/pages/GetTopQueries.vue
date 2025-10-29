@@ -51,12 +51,14 @@ function buildUrl() {
     setMessage('请输入 srcid 或 模板名');
     return;
   }
-  if (isNaN(+size.value) || Number.isInteger(+size.value) || size.value <= 0 || size.value > 100) {
+  const sizeValue = Number(size.value);
+  if (isNaN(sizeValue) || !Number.isInteger(sizeValue) || sizeValue <= 0 || sizeValue > 100) {
     setMessage('请输入正确的 size');
     return;
   }
+  size.value = sizeValue;
   chrome.storage.sync.set({ topQueryBaseUrl: baseUrl.value });
-  const params = new URLSearchParams({ size: size.value.toString() });
+  const params = new URLSearchParams({ size: sizeValue.toString() });
   if (srcid.value) params.set('srcid', srcid.value);
   if (templateName.value) params.set('template', templateName.value);
   return `${baseUrl.value}?${params.toString()}`;
