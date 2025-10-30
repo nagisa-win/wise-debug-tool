@@ -30,27 +30,58 @@ jobs:
         node-version: 20.x
         cache: 'pnpm'
 
-    - name: Read version from package.json
-      id: pkg
-      shell: bash
-      run: |
-        VERSION=$(node -p "require('./package.json').version")
-        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
     - name: Install dependencies
       run: pnpm install
 
     - name: Build
       run: pnpm run build
 
+    - name: Get version and commit messages
+      id: release_info
+      shell: bash
+      run: |
+        # Get version from package.json
+        VERSION=$(node -p "require('./package.json').version")
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+        # Get commit messages since last tag
+        if [ "${{ github.event_name }}" = "push" ]; then
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            COMMITS=$(git log $LAST_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          else
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges -10)
+          fi
+        else
+          # For pull requests, get commits in the PR
+          COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges ${{ github.event.pull_request.base.sha }}..HEAD)
+        fi
+        echo "commits<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$COMMITS" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+
     - name: Create GitHub Release and Upload ZIPs
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v${{ steps.pkg.outputs.version }}
-        name: Release v${{ steps.pkg.outputs.version }}
+        tag_name: v${{ steps.release_info.outputs.version }}
+        name: Release v${{ steps.release_info.outputs.version }}
         body: |
-          Automated release from CI for version v${{ steps.pkg.outputs.version }}
-          See diff: ${{ github.event.compare }}
+          ## 🚀 Release v${{ steps.release_info.outputs.version }}
+
+          **Automated release from CI**
+
+          📅 **Released**: ${{ github.event.head_commit.timestamp }}
+          🔗 **Compare**: [View Changes](${{ github.event.compare }})
+
+          ### 📝 Commit Messages
+          ${{ steps.release_info.outputs.commits }}
+
+          ### 📦 Files
+          - `chrome.zip` - Chrome extension package
+          - `firefox.zip` - Firefox extension package
+
+          ---
+          🤖 *This release was automatically created by GitHub Actions*
         files: |
           dist/chrome.zip
           dist/firefox.zip
