@@ -17,17 +17,32 @@
   ];
   const ONLINE_HOST = [...ONLINE_HOST_WISE, ...ONLINE_HOST_PC];
 
+  /**
+   * 解析当前页面URL信息
+   * @returns {Object} URL解析结果对象
+   * @returns {URL} returns.urlObj - URL对象
+   * @returns {string} returns.search - 查询字符串（不包含?）
+   * @returns {Array<Array<string>>} returns.queries - 查询参数键值对数组
+   * @returns {string} returns.sid - 会话ID
+   * @returns {string} returns.curWordKey - 当前搜索关键词的参数名
+   * @returns {string} returns.word - 搜索关键词
+   * @returns {string} returns.pageNum - 页码
+   */
   function getUrlInfo() {
     const urlObj = new URL(location.href);
-    let search = urlObj.search;
-    if (search.startsWith('?')) search = search.substring(1);
-    const queries = search ? search.split('&').map(i => i.split('=')) : [];
-    const sid = (queries.find(i => i[0] === 'sid') || [])[1];
-    const wordArg = queries.find(i => i[0] === 'word' || i[0] === 'wd') || [];
-    const curWordKey = wordArg[0] || 'wd';
-    const pageNumArg = queries.find(i => i[0] === 'pn') || [];
-    const word = wordArg[1] ? wordArg[1].replace(/%(?![0-9A-Fa-f]{2})/g, '%25') : '';
-    const pageNum = pageNumArg[1] || '00';
+    const searchParams = urlObj.searchParams;
+    const sid = searchParams.get('sid') || '';
+    const word = searchParams.get('word') || searchParams.get('wd') || '';
+    const curWordKey = searchParams.has('word') ? 'word' : 'wd';
+    const pageNum = searchParams.get('pn') || '';
+
+    // 为了兼容性，仍然返回 queries 数组和 search 字符串
+    const search = urlObj.search.substring(1); // 移除 ?
+    const queries = search ? search.split('&').map(i => {
+      const [key, value] = i.split('=');
+      return [key, value || ''];
+    }) : [];
+
     return { urlObj, search, queries, sid, curWordKey, word, pageNum };
   }
 
@@ -67,38 +82,54 @@
     console.debug(logArr);
     return logArr;
   }
-
+  /**
+   * 修改URL查询参数并跳转
+   * @param {string} key - 要修改的查询参数名
+   * @param {string} val - 新的参数值
+   */
   function changeSearchQuery(key, val) {
-    const { urlObj, search, queries } = getUrlInfo();
-    let newSearch = '';
-    if (!queries.find(i => i[0] === key)) {
-      newSearch = [...queries, [key, val]].map(i => i.join('=')).join('&');
+    const { urlObj } = getUrlInfo();
+    const searchParams = new URLSearchParams(urlObj.search);
+    if (key && val) {
+      searchParams.set(key, val);
     } else {
-      newSearch = queries.map(i => (i[0] === key ? [key, val].join('=') : i.join('='))).join('&');
+      searchParams.delete(key);
     }
-    location.href = [urlObj.origin, urlObj.pathname, `?${newSearch}`].join('');
+    const newUrl = new URL(urlObj);
+    newUrl.search = searchParams.toString();
+    location.href = newUrl.toString();
   }
 
+  /**
+   * 切换主机名并跳转
+   * @param {string} [newHost] - 新的主机名，如果为空则使用默认主机
+   */
   function changeHost(newHost) {
-    const { urlObj, search } = getUrlInfo();
+    const { urlObj } = getUrlInfo();
     const host = newHost || ONLINE_HOST[0];
-    location.href = [urlObj.protocol, '//', host, urlObj.pathname, `?${search}`].join('');
+    const newUrl = new URL(urlObj);
+    newUrl.host = host;
+    location.href = newUrl.toString();
   }
-
+  /**
+   * 跳转到下一页
+   */
   function nextPage() {
     const { pageNum } = getUrlInfo();
-    if (pageNum === '00') return changeSearchQuery('pn', '10');
+    if (pageNum === '') return changeSearchQuery('pn', '10');
     const realPageNum = Number.parseInt(pageNum, 10) / 10;
-    const nextPageNum = realPageNum + 1 + '0';
-    return changeSearchQuery('pn', nextPageNum);
+    const nextPageNum = (realPageNum + 1) * 10;
+    return changeSearchQuery('pn', String(nextPageNum));
   }
-
+  /**
+   * 跳转到上一页
+   */
   function prevPage() {
     const { pageNum } = getUrlInfo();
-    if (pageNum === '00') return;
+    if (pageNum === '') return;
     const realPageNum = Number.parseInt(pageNum, 10) / 10;
-    const nextPageNum = realPageNum === 1 ? '' : realPageNum - 1 + '0';
-    return changeSearchQuery('pn', nextPageNum);
+    const prevPageNum = realPageNum === 1 ? '' : (realPageNum - 1) * 10;
+    return changeSearchQuery('pn', String(prevPageNum));
   }
 
   // ========== Storage helpers (use extension storage, env-aware) ==========
@@ -172,7 +203,7 @@
   }
 
   function setAlwaysLog(val) {
-    localStorage.setItem('alwaysLogCard', val);
+    localStorage.setItem('alwaysLogCard', String(val ? 1 : 0));
   }
 
   async function clearStorage(key) {
@@ -212,6 +243,13 @@
     await setArray('words', newArr);
   }
 
+  /**
+   * 定位并滚动到指定的搜索结果卡片
+   * @param {string|number} tplID - 模板ID或模板名称
+   * @param {number} [order=1] - 第几个匹配的卡片（从1开始）
+   * @returns {Object|null} 滚动位置信息，如果找不到卡片则返回null
+   * @returns {number} returns.y - 卡片的Y坐标位置
+   */
   function locateCard(tplID, order = 1) {
     if (!tplID) return;
     let cards;
@@ -243,6 +281,21 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  /**
+   * 获取当前页面状态信息
+   * @returns {Promise<Object>} 页面状态对象
+   * @returns {string} returns.host - 当前主机名
+   * @returns {boolean} returns.isPC - 是否为PC端
+   * @returns {string[]} returns.ONLINE_HOST - 在线主机列表
+   * @returns {string} returns.sid - 会话ID
+   * @returns {string} returns.word - 搜索关键词
+   * @returns {string} returns.curWordKey - 当前搜索关键词的参数名
+   * @returns {string} returns.pageNum - 页码
+   * @returns {string[]} returns.storedSids - 存储的会话ID列表
+   * @returns {string[]} returns.storedWords - 存储的搜索词列表
+   * @returns {boolean} returns.alwaysLog - 是否始终显示卡片信息
+   * @returns {boolean} returns.isOnlineHost - 是否为在线主机
+   */
   async function getState() {
     const { urlObj, sid, curWordKey, word, pageNum } = getUrlInfo();
     let storedSids = await getArray('sids');
@@ -360,10 +413,10 @@
               data: locateCard(payload?.tplID, payload?.order || 1),
             });
           case 'set_always_log':
-            setAlwaysLog(payload?.val ? 1 : 0);
+            setAlwaysLog(payload?.val);
             // 更新缓存
             if (cachedState) {
-              cachedState.alwaysLog = payload.val;
+              cachedState.alwaysLog = !!payload?.val;
             }
             return sendResponse({ ok: true });
           case 'scroll_to_top':

@@ -62,6 +62,7 @@
         <el-form-item label="分页">
           <el-space>
             <el-button @click="prevPage">上一页</el-button>
+            <el-tag type="success">{{ pnValue }}</el-tag>
             <el-button type="primary" @click="nextPage">下一页</el-button>
           </el-space>
         </el-form-item>
@@ -118,7 +119,7 @@ const state = reactive<State>({
   sid: '',
   word: '',
   curWordKey: 'wd',
-  pageNum: '00',
+  pageNum: '',
   storedSids: [],
   storedWords: [],
   alwaysLog: false,
@@ -127,6 +128,7 @@ const state = reactive<State>({
 
 const sidValue = ref<string>('0');
 const wordValue = ref<string>('');
+const pnValue = ref<number>(0);
 const alwaysLog = ref<boolean>(false);
 const tplID = ref<string>('');
 const order = ref<number>(1);
@@ -176,7 +178,8 @@ async function getActiveTabId(): Promise<number> {
 
 async function callContent<K extends ContentCommand>(
   cmd: K,
-  payload?: CommandPayloadMap[K]
+  payload?: CommandPayloadMap[K],
+  cb?: (response?: CommandResponseMap[K]) => void
 ): Promise<CommandResponseMap[K]> {
   const tabId = await getActiveTabId();
   return new Promise((resolve, reject) => {
@@ -189,7 +192,12 @@ async function callContent<K extends ContentCommand>(
         reject('no_response');
         return;
       }
-      if (resp.ok) resolve(resp.data as CommandResponseMap[K]);
+      if (resp.ok) {
+        if (cb) {
+          cb(resp.data as CommandResponseMap[K]);
+        }
+        resolve(resp.data as CommandResponseMap[K]);
+      }
       else reject(resp.error);
     });
   });
@@ -238,6 +246,7 @@ async function initializeState() {
     sidValue.value = s.sid ? String(s.sid) : '0';
     wordValue.value = s.word || '';
     alwaysLog.value = !!s.alwaysLog;
+    pnValue.value = s.pageNum ? parseInt(s.pageNum, 10) / 10 : 0;
   } catch (error) {
     console.warn('初始化状态失败:', error);
     // 如果获取状态失败，使用默认状态
@@ -296,11 +305,27 @@ async function onWordChange(val: string) {
 }
 /** 下一页 */
 async function nextPage() {
-  await callContent('next_page');
+  await callContent(
+    'next_page',
+    undefined,
+    () => {
+      const newPn = pnValue.value + 1;
+      updateCachedState({ pageNum: String(newPn * 10) });
+      pnValue.value = newPn;
+    }
+  );
 }
 /** 上一页 */
 async function prevPage() {
-  await callContent('prev_page');
+  await callContent(
+    'prev_page',
+    undefined,
+    () => {
+      const newPn = Math.max(0, pnValue.value - 1);
+      updateCachedState({ pageNum: newPn === 0 ? '' : String(newPn * 10) });
+      pnValue.value = newPn;
+    }
+  );
 }
 /** 切换线上/非线上环境 */
 async function changeHost() {
