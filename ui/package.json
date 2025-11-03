@@ -1,7 +1,7 @@
 {
   "name": "wise-debug-tool-ui",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
@@ -18,6 +18,8 @@
     "@vitejs/plugin-vue": "^5.0.4",
     "less": "^4.4.2",
     "typescript": "^5.4.0",
+    "unplugin-auto-import": "^20.2.0",
+    "unplugin-vue-components": "^30.0.0",
     "vite": "^6.0.0",
     "vue-tsc": "^2.0.21"
   }

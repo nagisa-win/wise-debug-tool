@@ -15,7 +15,9 @@
     'se-mirror.baidu.com:8954',
     'fj-www.baidu.com',
   ];
-  const ONLINE_HOST = [...ONLINE_HOST_WISE, ...ONLINE_HOST_PC];
+  const ONLINE_HOST = isPC
+    ? [...ONLINE_HOST_PC, ...ONLINE_HOST_WISE]
+    : [...ONLINE_HOST_WISE, ...ONLINE_HOST_PC];
 
   /**
    * 解析当前页面URL信息
@@ -38,10 +40,12 @@
 
     // 为了兼容性，仍然返回 queries 数组和 search 字符串
     const search = urlObj.search.substring(1); // 移除 ?
-    const queries = search ? search.split('&').map(i => {
-      const [key, value] = i.split('=');
-      return [key, value || ''];
-    }) : [];
+    const queries = search
+      ? search.split('&').map(i => {
+          const [key, value] = i.split('=');
+          return [key, value || ''];
+        })
+      : [];
 
     return { urlObj, search, queries, sid, curWordKey, word, pageNum };
   }
@@ -95,9 +99,8 @@
     } else {
       searchParams.delete(key);
     }
-    const newUrl = new URL(urlObj);
-    newUrl.search = searchParams.toString();
-    location.href = newUrl.toString();
+    urlObj.search = searchParams.toString();
+    location.href = urlObj.toString();
   }
 
   /**
@@ -107,9 +110,18 @@
   function changeHost(newHost) {
     const { urlObj } = getUrlInfo();
     const host = newHost || ONLINE_HOST[0];
-    const newUrl = new URL(urlObj);
-    newUrl.host = host;
-    location.href = newUrl.toString();
+
+    // 分别设置 hostname 和 port，确保 port 能被正确处理
+    const [hostname, port] = host.split(':');
+    urlObj.hostname = hostname;
+    if (port) {
+      urlObj.port = port;
+    } else {
+      // 如果新主机没有端口，清除现有端口
+      urlObj.port = '';
+    }
+
+    location.href = urlObj.toString();
   }
   /**
    * 跳转到下一页

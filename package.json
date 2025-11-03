@@ -1,9 +1,8 @@
 {
   "name": "wise-debug-tool",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Browser extension for debugging",
-  "packageManager": "pnpm@9",
   "scripts": {
     "dev": "node scripts/dev.js",
     "clean:ui": "rm -rf src/popup",
