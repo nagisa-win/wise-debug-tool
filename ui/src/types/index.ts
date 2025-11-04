@@ -28,6 +28,7 @@ export type ContentCommand =
   | 'clear_storage'
   | 'next_page'
   | 'prev_page'
+  | 'first_page'
   | 'change_host'
   | 'log_card'
   | 'locate_card'
@@ -42,6 +43,7 @@ export type CommandPayloadMap = {
   clear_storage: { key?: 'sids' | 'words' } | undefined;
   next_page: undefined;
   prev_page: undefined;
+  first_page: undefined;
   change_host: undefined;
   log_card: undefined;
   locate_card: { tplID: string; order: number };
@@ -57,6 +59,7 @@ export type CommandResponseMap = {
   clear_storage: true;
   next_page: true;
   prev_page: true;
+  first_page: true;
   change_host: true;
   log_card: true;
   locate_card: true;

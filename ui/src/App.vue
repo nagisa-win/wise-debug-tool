@@ -64,7 +64,7 @@
         <el-form-item label="分页">
           <el-space>
             <el-button @click="prevPage">上一页</el-button>
-            <el-tag type="success">{{ pnValue }}</el-tag>
+            <el-tag type="success" @click="firstPage">{{ pnValue }}</el-tag>
             <el-button type="primary" @click="nextPage">下一页</el-button>
           </el-space>
         </el-form-item>
@@ -334,6 +334,12 @@ async function prevPage() {
     const newPn = Math.max(0, pnValue.value - 1);
     updateCachedState({ pageNum: newPn === 0 ? '' : String(newPn * 10) });
     pnValue.value = newPn;
+  });
+}
+async function firstPage() {
+  await callContent('first_page', undefined, () => {
+    updateCachedState({ pageNum: '' });
+    pnValue.value = 0;
   });
 }
 /** 切换线上/非线上环境 */

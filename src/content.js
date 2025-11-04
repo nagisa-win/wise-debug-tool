@@ -144,6 +144,13 @@
     return changeSearchQuery('pn', String(prevPageNum));
   }
 
+  /**
+   * 回首页
+   */
+  function firstPage() {
+    return changeSearchQuery('pn', '');
+  }
+
   // ========== Storage helpers (use extension storage, env-aware) ==========
 
   const storage = (chrome && chrome.storage && chrome.storage.local) || null;
@@ -374,6 +381,7 @@
           case 'get_state':
             return sendResponse({ ok: true, data: await getCachedState() });
           case 'change_search_query':
+            firstPage();
             changeSearchQuery(payload?.key, payload?.val);
             // 更新缓存中的相关状态
             if (payload?.key === 'sid') {
@@ -390,6 +398,9 @@
             return sendResponse({ ok: true });
           case 'prev_page':
             prevPage();
+            return sendResponse({ ok: true });
+          case 'first_page':
+            firstPage();
             return sendResponse({ ok: true });
           case 'clear_storage':
             await clearStorage(payload?.key);

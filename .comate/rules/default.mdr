@@ -1,0 +1,22 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+## 项目概述
+
+这是一个百度搜索页面调试工具（Chrome 扩展 / Firefox 扩展），运行在百度搜索的结果页环境中。
+
+## 项目结构
+
+- ./src 浏览器扩展源代码目录，主要是content.js和background.js
+- ./ui/src 浏览器扩展弹出窗口的源代码目录，使用Vue3 + ElementPlus框架
+- ./scripts 开发、编译脚本
+- ./.github 用于Github Actions等配置
+
+## 必须步骤
+
+1. 读取 package.json README.md manifest.json 理解本项目基本结构、入口文件、配置项目、依赖关系等。
+2. 每个改动必须考虑 src/ ui/src 下的浏览器扩展通信关系，确保接口一直没有冲突
+3. 项目面向 Chrome / Firefox 浏览器，注意各个浏览器之间的兼容性关系和API使用
+4. 需要修改代码时必须完全读取文件，禁止出现局部修改代码，从而导致其他函数调用出现bug。
