@@ -58,6 +58,18 @@
     }
   }
 
+  function getCardData(tpl) {
+    const sanRoot = tpl.querySelector('div[san-root]')?.getAttribute('san-root');
+    if (!sanRoot) return null;
+    const script = document.querySelector(`script#atom-data-${sanRoot}`);
+    if (!script) return null;
+    try {
+      return JSON.parse(script.textContent);
+    } catch {
+      return null;
+    }
+  }
+
   function logCard() {
     const logArr = [];
     const countMap = new Map();
@@ -69,7 +81,7 @@
       const tplName = tpl.getAttribute('tpl');
       const srcId = tpl.getAttribute('new_srcid') || tpl.getAttribute('srcid');
       const count = countMap.get(tplName) || 1;
-      logArr.push({ order, tpl: tplName, srcId, count });
+      logArr.push({ order, tpl: tplName, srcId, count, data: getCardData(tpl) });
       if (tpl.querySelector('div[card-info-dom]')) return;
       tpl.style.position = 'relative';
       const infoDom = document.createElement('div');
